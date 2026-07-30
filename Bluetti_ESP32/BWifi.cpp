@@ -205,7 +205,15 @@ void initBWifi(bool resetWifi){
 }
 
 void handleWebserver() {
-  
+
+  // ElegantOTA v3 does NOT reboot from its upload handler — it only sets a
+  // flag, and the actual ESP.restart() happens in ElegantOTA.loop() two
+  // seconds later. Upstream calls ElegantOTA.begin() but never .loop(), so an
+  // OTA reports "OK", writes the image, marks the partition... and then the
+  // device just never reboots, silently keeping the OLD firmware running.
+  // Must be OUTSIDE the millis() throttle below to be called every iteration.
+  ElegantOTA.loop();
+
   //Serial.println(F("DEBUG handleWebserver"));
   if ((millis() - lastTimeWebUpdate) > MSG_VIEWER_REFRESH_CYCLE*1000) {
     

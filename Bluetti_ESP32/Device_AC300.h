@@ -98,6 +98,10 @@ static device_field_data_t bluetti_device_state[] = {
   {UPS_MODE,                 0x0B, 0xB9, 1, 0, 0, UINT_FIELD},
    //{PACK_NUM,                 0x0B, 0xBE, 1, 0, 0, UINT_FIELD},
   {GRID_CHARGE_ON,           0x0B, 0xC3, 1, 0, 0, BOOL_FIELD},
+  // AC200L max grid INPUT current, in amps. Found session 38 as the only
+  // settings register that moved across operator app flips 6->5->3->5.
+  // Covered by the 0x0BB9/0x3F polling read below (0x0BB9-0x0BF7).
+  {AC_INPUT_CURRENT_MAX,     0x0B, 0xCB, 1, 0, 0, UINT_FIELD},
   {AUTO_SLEEP_MODE,          0x0B, 0xF5, 1, 0, 0, UINT_FIELD}
 
   
@@ -105,8 +109,14 @@ static device_field_data_t bluetti_device_state[] = {
 
 static device_field_data_t bluetti_device_command[] = {
   /*Page 0x00 Core */
-  {AC_OUTPUT_ON,      0x0B, 0xBF, 1, 0, 0, BOOL_FIELD}, 
-  {DC_OUTPUT_ON,      0x0B, 0xC0, 1, 0, 0, BOOL_FIELD}
+  {AC_OUTPUT_ON,      0x0B, 0xBF, 1, 0, 0, BOOL_FIELD},
+  {DC_OUTPUT_ON,      0x0B, 0xC0, 1, 0, 0, BOOL_FIELD},
+  // Writable max grid input current (amps). Payload is a plain integer — the
+  // struct's `len` member IS the register value for function 0x06.
+  // Name-collision checked against the two entries above: callback() matches
+  // topics by SUBSTRING with no break, so overlapping names would misroute
+  // the write. "ac_input_current_max" shares no substring with either.
+  {AC_INPUT_CURRENT_MAX, 0x0B, 0xCB, 1, 0, 0, UINT_FIELD}
 };
 
 static device_field_data_t bluetti_polling_command[] = {
