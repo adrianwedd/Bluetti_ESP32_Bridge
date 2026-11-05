@@ -16,6 +16,14 @@
 #define DEVICE_NAME "BLUETTI-MQTT"
 #define BLUETTI_TYPE AC300
 
+// BLE address of the power station.
+// This AC200L advertises with an EMPTY name, so the name match alone never
+// succeeds. Identity is instead confirmed by service UUID 0xff00 + a
+// "BLBLUETTI" manufacturer payload + this address. The address is required so
+// the bridge cannot attach to a neighbouring Bluetti.
+// Comment this out to require the advertised-name match only (old behaviour).
+#define BLUETTI_BLE_ADDRESS "08:d1:f9:90:f3:8a"
+
 #define BLUETOOTH_QUERY_MESSAGE_DELAY 3000
 #define BLUETOOTH_MAX_RETRIES_BEFORE_REBOOT 10
 #define BLUETOOTH_SCAN_DURATION_IN_SECONDS 10

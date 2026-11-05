@@ -38,6 +38,12 @@
   #define BLUETTI_TYPE AC300
 #endif
 
+// Optional: BLE address of the power station, used as a fallback identity when
+// the unit advertises without a name (observed on the AC200L). Identity is then
+// service UUID 0xff00 + a "BLBLUETTI" manufacturer payload + this address.
+// The address keeps the fallback from attaching to any other Bluetti in range.
+// #define BLUETTI_BLE_ADDRESS "08:d1:f9:90:f3:8a"
+
 
 
 #endif

@@ -19,6 +19,49 @@ QueueHandle_t sendQueue;
 
 unsigned long lastBTMessage = 0;
 
+// --- BLE link management ---------------------------------------------------
+// Upstream scanned once at boot and only re-scanned after a *successful* match,
+// so one missed 5 s window meant the bridge never connected again and the
+// watchdog deep-slept it in a loop. Scanning is now periodic and the watchdog
+// is left as the last-resort path it was meant to be.
+static BLEClient*     pClient = nullptr;   // one reused client, not one per attempt
+static BLEAddress     bluettiAddress;      // copied at match time: no dangling pointer into scan results
+static bool           scanInProgress = false;
+static bool           scanDue = true;      // set on disconnect and on failed connect
+static unsigned long  lastScanStart = 0;
+
+static void onScanComplete(BLEScanResults results) {
+  scanInProgress = false;
+  Serial.printf("[BT] scan complete: %d advertiser(s)\n", (int) results.getCount());
+}
+
+/**
+ * Identity of the power station.
+ *
+ *  (A) the configured BLE name, exactly as before, for units that advertise one;
+ *  (B) the shape this AC200L actually advertises: no name, service 0xff00, a
+ *      "BLBLUETTI" manufacturer payload, and its known BLE address.
+ *
+ * The address is part of (B) deliberately: service UUID and manufacturer prefix
+ * alone would attach to any Bluetti in radio range.
+ */
+static bool isBluettiDevice(BLEAdvertisedDevice* adv, const char* deviceId) {
+  if (!adv->haveServiceUUID() || !adv->isAdvertisingService(serviceUUID)) {
+    return false;
+  }
+  if (strlen(deviceId) > 0 && strcmp(adv->getName().c_str(), deviceId) == 0) {
+    return true;
+  }
+#ifdef BLUETTI_BLE_ADDRESS
+  if (strcasecmp(adv->getAddress().toString().c_str(), BLUETTI_BLE_ADDRESS) == 0
+      && adv->haveManufacturerData()
+      && adv->getManufacturerData().find("BLBLUETTI") != std::string::npos) {
+    return true;
+  }
+#endif
+  return false;
+}
+
 class MyClientCallback : public BLEClientCallbacks {
   void onConnect(BLEClient* pclient) {
     Serial.println(F("BLE - onConnect"));
@@ -29,6 +72,15 @@ class MyClientCallback : public BLEClientCallbacks {
 
   void onDisconnect(BLEClient* pclient) {
     connected = false;
+    // Stale handles must not survive the link: polling an invalidated
+    // characteristic is how a dropped link turns into a crash instead of a retry.
+    pRemoteWriteCharacteristic  = nullptr;
+    pRemoteNotifyCharacteristic = nullptr;
+    // Drop queued frames: a notification from the next link must not be parsed
+    // against a page/offset left over from the dropped one.
+    if (commandHandleQueue != nullptr) { xQueueReset(commandHandleQueue); }
+    if (sendQueue != nullptr)          { xQueueReset(sendQueue); }
+    scanDue = true;
     Serial.println(F("BLE - onDisconnect"));
     #ifdef DISPLAYSSD1306
       disp_setBlueTooth(false);
@@ -53,13 +105,22 @@ class BluettiAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     Serial.print(F("[BLE] Advertised Device found: "));
     Serial.println(advertisedDevice->toString().c_str());
 
-     ESPBluettiSettings settings = get_esp32_bluetti_settings();
-    // We have found a device, let us now see if it contains the service we are looking for.
-    if (advertisedDevice->haveServiceUUID() && advertisedDevice->isAdvertisingService(serviceUUID) && (strcmp(advertisedDevice->getName().c_str(),settings.bluetti_device_id)==0) ) {
+    ESPBluettiSettings settings = get_esp32_bluetti_settings();
+    // We have found a device, let us now see if it is our power station.
+    if (isBluettiDevice(advertisedDevice, settings.bluetti_device_id)) {
+      if (doConnect) {
+        return;   // already matched in this scan; do not queue a second attempt
+      }
+      Serial.printf("[BT] matched power station at %s (advType=%d connectable=%d addrType=%d)\n",
+                    advertisedDevice->getAddress().toString().c_str(),
+                    (int) advertisedDevice->getAdvType(),
+                    advertisedDevice->isConnectable() ? 1 : 0,
+                    (int) advertisedDevice->getAddress().getType());
       BLEDevice::getScan()->stop();
-      bluettiDevice = advertisedDevice;
+      // Copy the address: the advertised-device object belongs to the scan
+      // results and is invalidated by the next clearResults().
+      bluettiAddress = advertisedDevice->getAddress();
       doConnect = true;
-      doScan = true;
     }
   } 
 };
@@ -111,18 +172,39 @@ static void notifyCallback(
 
 bool connectToServer() {
     Serial.print(F("[BT] Forming a connection to "));
-    Serial.println(bluettiDevice->getAddress().toString().c_str());
+    Serial.println(bluettiAddress.toString().c_str());
+
+    // Reset any handles left from a previous attempt before touching the link.
+    connected = false;
+    pRemoteWriteCharacteristic  = nullptr;
+    pRemoteNotifyCharacteristic = nullptr;
 
     BLEDevice::setMTU(517); // set client to request maximum MTU from server (default is 23 otherwise)
-    BLEClient*  pClient  = BLEDevice::createClient();
-    Serial.println(F("[BT] - Created client"));
 
-    pClient->setClientCallbacks(new MyClientCallback());
+    // One client for the life of the process. Creating a client per attempt
+    // leaks a peer for every failed reconnect, which is how a flaky link turns
+    // into a device that needs a power cycle.
+    if (pClient == nullptr) {
+      pClient = BLEDevice::createClient();
+      pClient->setClientCallbacks(new MyClientCallback());
+      Serial.println(F("[BT] - Created client"));
+    } else {
+      pClient->disconnect();   // drop any stale session from the previous attempt
+    }
 
-    // Connect to the remove BLE Server.
-    pClient->connect(bluettiDevice);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
+    // Connect to the remote BLE Server.
+    if (!pClient->connect(bluettiAddress)) {
+      int rc = pClient->getLastError();
+      // rc=574 (0x23E) is HCI 0x3E BLE_ERR_CONN_ESTABLISHMENT: our CONNECT_IND
+      // went unanswered, i.e. the power station is not accepting the link.
+      // Logged with the advertised address type so the two causes (wrong
+      // address type vs. the unit refusing) can be told apart afterwards.
+      Serial.printf("[BT] - connect() failed: rc=%d (%s) addrType=%d\n",
+                    rc, NimBLEUtils::returnCodeToString(rc),
+                    (int) bluettiAddress.getType());
+      return false;
+    }
     Serial.println(F("[BT] - Connected to server"));
-    // pClient->setMTU(517); //set client to request maximum MTU from server (default is 23 otherwise)
   
     // Obtain a reference to the service we are after in the remote BLE server.
     BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
@@ -166,6 +248,7 @@ bool connectToServer() {
       pRemoteNotifyCharacteristic->registerForNotify(notifyCallback);
 
     connected = true;
+    lastBTMessage = millis();   // start the poll/watchdog clock from the connection, not from boot
      #ifdef RELAISMODE
       #ifdef DEBUG
         Serial.println(F("[BT] activate relais contact"));
@@ -182,6 +265,9 @@ void handleBTCommandQueue(){
     bt_command_t command;
     if(xQueueReceive(sendQueue, &command, 0)) {
       
+      if (pRemoteWriteCharacteristic == nullptr) {
+        return;   // link dropped between queueing and writing; drop the frame
+      }
 #ifdef DEBUG
     Serial.print("[BT] Write Request FF02 - Value: ");
     
@@ -205,14 +291,16 @@ void sendBTCommand(bt_command_t command){
 void handleBluetooth(){
 
   if (doConnect == true) {
+    doConnect = false;
     if (connectToServer()) {
       Serial.println(F("We are now connected to the Bluetti BLE Server."));
     } else {
-      Serial.println(F("We have failed to connect to the server; there is nothing more we will do."));
+      Serial.println(F("Failed to connect to the power station; retrying on the next scan."));
+      scanDue = true;
     }
-    doConnect = false;
   }
 
+  // Last resort only: five minutes with no BLE message at all.
   if ((millis() - lastBTMessage) > (MAX_DISCONNECTED_TIME_UNTIL_REBOOT * 60000)){ 
     Serial.println(F("[BT] disconnected over allowed limit, reboot device"));
     #ifdef SLEEP_TIME_ON_BT_NOT_AVAIL
@@ -249,8 +337,18 @@ void handleBluetooth(){
 
     handleBTCommandQueue();
     
-  }else if(doScan){
-    BLEDevice::getScan()->start(0);
+  } else if (!scanInProgress && (scanDue || (millis() - lastScanStart) >= ((unsigned long)BLUETOOTH_SCAN_INTERVAL_IN_SECONDS * 1000UL))) {
+    // Periodic rescan. Recovery from a missed match or a dropped link must not
+    // depend on the watchdog reboot; upstream only ever rescanned after a
+    // *successful* match, so a single missed window was permanent.
+    scanDue = false;
+    lastScanStart = millis();
+    scanInProgress = true;
+    BLEDevice::getScan()->clearResults();   // no unbounded result growth across rescans
+    if (!BLEDevice::getScan()->start(BLUETOOTH_SCAN_DURATION_IN_SECONDS, onScanComplete)) {
+      scanInProgress = false;
+      Serial.println(F("[BT] scan start failed; will retry"));
+    }
   }
 }
 

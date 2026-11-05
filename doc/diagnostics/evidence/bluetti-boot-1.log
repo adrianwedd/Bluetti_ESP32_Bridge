@@ -1,0 +1,61 @@
+ets Jun  8 2016 00:22:57
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 188777542, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:1
+load:0x3fff0030,len:1344
+load:0x40078000,len:13836
+load:0x40080400,len:3608
+entry 0x400805f0
+deactivate relais contact
+Loading Values from EEPROM
+*wm:AutoConnect 
+*wm:Connecting to SAVED AP: Cygnet
+*wm:connectTimeout not set, ESP waitForConnectResult... 
+*wm:AutoConnect: SUCCESS 
+*wm:STA IP Address: 192.168.20.140
+
+IP address: 
+192.168.20.140
+MDNS responder started
+webserver BT/MQTT variable logging disabled...
+HTTP server started
+[BLE] Advertised Device found: Name: Nest Hub Max, Address: 75:42:3f:95:56:d5, serviceUUID: 0xfea0
+Service Data:
+UUID: 0xfea0, Data: ���S�w   ���
+[BLE] Advertised Device found: Name: , Address: 1d:c9:2b:c6:74:f0
+Service Data:
+UUID: 0xfcf1, Data: J~�2��K�:}���	��!���
+[BLE] Advertised Device found: Name: , Address: 5b:d1:c3:98:59:f8, manufacturer data: 4c0009081302c0a800651b581608002514d0aa73e2ca
+[BLE] Advertised Device found: Name: , Address: 66:00:64:d3:10:d3, manufacturer data: 4c0010064d1df92dcc28, txPower: 0
+[BLE] Advertised Device found: Name: , Address: 43:c2:a2:ef:c4:29, manufacturer data: e00014e3ca5b503d, serviceUUID: 0xfe9f
+Service Data:
+UUID: 0xfe9f, Data: 
+[BLE] Advertised Device found: Name: , Address: 7f:ea:a0:fd:be:87, manufacturer data: e0001466ca8e7610, serviceUUID: 0xfe9f
+Service Data:
+UUID: 0xfe9f, Data: 
+[BLE] Advertised Device found: Name: YN9-AU-KHA0093A, Address: c8:ff:77:c1:d0:5b, serviceUUID: 2dd10010-1c37-452d-8979-d1b4a787d0a4, txPower: 0
+[BLE] Advertised Device found: Name: , Address: 58:45:9b:a3:e7:6d, manufacturer data: 4c001005411c168ac8, txPower: 0
+[BLE] Advertised Device found: Name: SHIELD, Address: 5d:dc:7f:64:ac:aa, manufacturer data: ffff35303439376463643537346261376563, serviceUUID: 0x3456, txPower: -15
+[BLE] Advertised Device found: Name: , Address: 68:54:f7:63:f0:2c, manufacturer data: 4c0009081302c0a800f91b581608000fe5bde4da00a9
+[BLE] Advertised Device found: Name: F045D2415000241065, Address: 95:a4:92:92:3c:6f, manufacturer data: aabbccdd00000000000000000000000000006f3c9292a495000000, serviceUUID: 0xfff0
+[BLE] Advertised Device found: Name: , Address: 60:bc:e5:43:61:7c, manufacturer data: 4c0010064d1df92dcc28
+[BLE] Advertised Device found: Name: , Address: 5e:45:39:5d:94:c8, manufacturer data: 4c001005411c168ac8
+[BLE] Advertised Device found: Name: , Address: 74:f5:15:99:5a:f9, manufacturer data: e0001469ca72c3eb, serviceUUID: 0xfe9f
+Service Data:
+UUID: 0xfe9f, Data: 
+[BLE] Advertised Device found: Name: , Address: 75:1d:49:e3:1d:83, manufacturer data: 4c000215c46482a8f6c84dc0b5a3c68e2b35f94900649c44c5
+[BLE] Advertised Device found: Name: , Address: f6:53:d7:f6:26:0e, manufacturer data: 4c0012020002
+[BLE] Advertised Device found: Name: , Address: 08:d1:f9:90:f3:8a, manufacturer data: 424c424c5545545449, serviceUUID: 0xff00
+[BLE] Advertised Device found: Name: , Address: 5d:ce:77:8b:64:e2
+Service Data:
+UUID: 0xfeaa, Data: @#
+[MQTT] init MQTT
+[MQTT] Connecting to MQTT at: 192.168.0.200:1883
+[MQTT] Connected to MQTT Server... 
+[MQTT] subscribe to topic: ac_output_on
+[MQTT] subscribe to topic: dc_output_on
+[MQTT] subscribe to topic: ac_input_current_max
+[MQTT] PublishingDeviceState: {"IP":"192.168.20.140", "MAC":"50:02:91:A2:2F:1C", "Uptime":6998}
+[MQTT] PublishingDeviceStateStatus: {"MQTTconnected":1, "BTconnected":0}
