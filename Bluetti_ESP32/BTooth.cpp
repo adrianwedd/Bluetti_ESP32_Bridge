@@ -29,6 +29,22 @@ static BLEAddress     bluettiAddress;      // copied at match time: no dangling 
 static bool           scanInProgress = false;
 static bool           scanDue = true;      // set on disconnect and on failed connect
 static unsigned long  lastScanStart = 0;
+static unsigned long  lastConnectAttempt = 0;
+static bool           everAttemptedConnect = false;
+static uint8_t        connectFailures = 0;
+
+/**
+ * Space out connection attempts after a failure: 10 s, 20 s, 40 s, 80 s, 160 s,
+ * then 300 s. Scanning stays frequent, but a station that is refusing the link
+ * must not be hammered every 10 s indefinitely - it is already advertising
+ * while ignoring CONNECT_IND, and thousands of retries cannot help it.
+ */
+static unsigned long connectBackoffMs() {
+  uint8_t shift = connectFailures > 5 ? 5 : connectFailures;
+  unsigned long s = 10UL << shift;
+  if (s > 300UL) { s = 300UL; }
+  return s * 1000UL;
+}
 
 static void onScanComplete(BLEScanResults results) {
   scanInProgress = false;
@@ -292,11 +308,22 @@ void handleBluetooth(){
 
   if (doConnect == true) {
     doConnect = false;
-    if (connectToServer()) {
-      Serial.println(F("We are now connected to the Bluetti BLE Server."));
+    if (everAttemptedConnect && (millis() - lastConnectAttempt) < connectBackoffMs()) {
+      // Still inside the backoff window; keep scanning, do not retry yet.
+      Serial.printf("[BT] backing off: %u consecutive failure(s), next attempt in %lus\n",
+                    (unsigned) connectFailures,
+                    (connectBackoffMs() - (millis() - lastConnectAttempt)) / 1000UL);
     } else {
-      Serial.println(F("Failed to connect to the power station; retrying on the next scan."));
-      scanDue = true;
+      everAttemptedConnect = true;
+      lastConnectAttempt = millis();
+      if (connectToServer()) {
+        connectFailures = 0;
+        Serial.println(F("We are now connected to the Bluetti BLE Server."));
+      } else {
+        if (connectFailures < 6) { connectFailures++; }
+        Serial.println(F("Failed to connect to the power station; retrying on the next scan."));
+        scanDue = true;
+      }
     }
   }
 
