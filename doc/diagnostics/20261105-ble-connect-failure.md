@@ -194,6 +194,48 @@ recovering station was never noticed, because the bridge had already stopped
 scanning for good. Now it retries every ~10 s and will attach within one scan
 cycle of the station coming back, with no reboot and no replug.
 
+## WiFi / local Modbus TCP route — investigated 2026-11-05
+
+The unit's WiFi is independent of the wedged BLE, so this was checked live.
+
+**It is on the network and healthy.** From the UDR7 (`ip neigh`, dnsmasq leases,
+conntrack):
+
+```
+192.168.20.117   08:d1:f9:90:f3:88   dhcp hostname: BLUETTI
+```
+
+`08:d1:f9:90:f3:8a` is the BLE address this bridge matches; `…:3:88` is the WiFi
+interface — same OUI, adjacent. Confirmed as the AC200L, not inferred.
+
+Its cloud path is live while BLE is dead: one ESTABLISHED TCP session to
+`8.219.99.127:18760` (Alibaba Cloud Singapore, APNIC 8.208.0.0/12), ~1.1 MB sent.
+Ping 37-58 ms.
+
+**But no local service is exposed.** Probed from the router (same L2 segment):
+80, 443, 502, 8080, 8888, 1883, 22, 23, 21, 5000, 8081, 9999, 102 — all refused or
+closed. Port 80 refused means there is no built-in "BLUETTI Manager" web page, and
+that page is where Modbus TCP is enabled. The community integration's README names
+exactly this class: "the EP600 has no local web page, so no Modbus TCP."
+
+**Conclusion:** this unit's IoT firmware predates the local Modbus TCP interface.
+Reports put the AC200L on IoT ≥ v9041.15 for it (owner-confirmed in
+Patrick762/hassio-bluetti-bt#247), and that update is also the one that encrypts
+BLE — which is a decision, not a free upgrade, because it ends third-party BLE
+(including this bridge).
+
+**Target once the unit exposes it:** `bluetti-community/hassio-bluetti-modbus`
+(active — pushed 2026-11-04). AC200L is listed as supported (manual by IP, AC + DC
+output control, evidence from 2 units). Read locally over Modbus TCP: no account,
+no API key, readings survive the internet being down. Caveats from its README: no
+per-pack data, SoC limits read-only, and on the AC500/EP500Pro never use a Modbus
+unit id other than 1 (it freezes the unit's Modbus TCP until a power cycle).
+
+**Cross-VLAN piece:** HA is on 192.168.0.200 and the unit on VLAN 20, so polling
+:502 needs a UniFi policy mirroring the existing "Allow Bluetti bridge to MQTT"
+pattern (`scripts/allow-enviro-mqtt.sh`, `lib/api.sh`, DRY_RUN/CONFIRM). Not
+created — it is pointless until the port exists.
+
 ## Evidence files
 
 - `evidence/bluetti-boot-1.log` — 35 s capture, 18 advertisers, Bluetti present
