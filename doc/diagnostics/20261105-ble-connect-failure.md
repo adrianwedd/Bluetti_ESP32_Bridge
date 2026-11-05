@@ -163,6 +163,32 @@ name is empty) and CONNECT_IND. That is the second half of the operator's own
 symptom — "or the Bluetti BT does" — and it is not addressable from the host: the
 station has to free its own BLE (app reconnect or a power cycle).
 
+## Operator confirmation (2026-11-05 21:49, authoritative)
+
+The operator's phone could not connect to the AC200L either, and reported that the
+unit does not accept connections again until it is powered off and back on, and
+that all household devices run off it.
+
+That is the discriminator the host-side evidence could not provide: the refusal is
+not specific to this ESP32 or its address type, it affects every central. The unit's
+BLE stack is wedged. Consequences worth recording:
+
+- The wedge is a **Bluetti firmware defect**, not a bridge bug. Nothing on the
+  host, in Home Assistant, or in this firmware can clear it.
+- Recovery is physical: power-cycle the unit (or reconnect from the Bluetti app).
+  The cost is real — it takes the household loads down with it.
+- The wedge and the disappearance of the advertised name are the same event:
+  HA's last AC200L data is 2026-11-03 20:38, and the same scan that no longer sees
+  a name also no longer gets an answer to CONNECT_IND.
+- Watch for the unit changing its BLE address across a power cycle; the firmware
+  now logs a one-shot warning if a Bluetti-shaped advertiser does not match the
+  configured identity, which is the signal that `BLUETTI_BLE_ADDRESS` needs
+  updating rather than the fix having failed.
+
+The firmware fix still matters here: it is what turns "unit recovers" into "bridge
+is back within minutes", instead of the unit recovering and the bridge staying dead
+until someone notices and replugs it.
+
 What this fix changes for that failure mode is the recovery: previously a
 recovering station was never noticed, because the bridge had already stopped
 scanning for good. Now it retries every ~10 s and will attach within one scan

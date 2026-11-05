@@ -61,6 +61,12 @@ static void onScanComplete(BLEScanResults results) {
  * The address is part of (B) deliberately: service UUID and manufacturer prefix
  * alone would attach to any Bluetti in radio range.
  */
+static bool isBluettiShaped(BLEAdvertisedDevice* adv) {
+  return adv->haveServiceUUID() && adv->isAdvertisingService(serviceUUID)
+         && adv->haveManufacturerData()
+         && adv->getManufacturerData().find("BLBLUETTI") != std::string::npos;
+}
+
 static bool isBluettiDevice(BLEAdvertisedDevice* adv, const char* deviceId) {
   if (!adv->haveServiceUUID() || !adv->isAdvertisingService(serviceUUID)) {
     return false;
@@ -137,6 +143,17 @@ class BluettiAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
       // results and is invalidated by the next clearResults().
       bluettiAddress = advertisedDevice->getAddress();
       doConnect = true;
+    } else if (isBluettiShaped(advertisedDevice)) {
+      // A Bluetti, but not the one we are configured for. Say so once: after a
+      // power cycle the unit's address is the one thing that could legitimately
+      // change, and silently matching nothing is how this failure hides.
+      static bool warnedWrongIdentity = false;
+      if (!warnedWrongIdentity) {
+        warnedWrongIdentity = true;
+        Serial.printf("[BT] Bluetti-shaped advertiser at %s does not match the configured "
+                      "identity; check BLUETTI_BLE_ADDRESS / the device id\n",
+                      advertisedDevice->getAddress().toString().c_str());
+      }
     }
   } 
 };
