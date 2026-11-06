@@ -236,6 +236,42 @@ unit id other than 1 (it freezes the unit's Modbus TCP until a power cycle).
 pattern (`scripts/allow-enviro-mqtt.sh`, `lib/api.sh`, DRY_RUN/CONFIRM). Not
 created — it is pointless until the port exists.
 
+## Unit firmware, as reported by the operator (2026-11-05)
+
+```
+IoT   v9041.12
+ARM   v2131.05
+DSP   v2130.13
+```
+
+IoT v9041.12 is **below v9041.15**, the version at which the AC200L's built-in
+local web page / Modbus TCP has been owner-confirmed (Patrick762/hassio-bluetti-bt#247).
+That is a second, independent explanation of the port-80 refusal measured from the
+UDR7 — the version number and the closed port agree, so this is not a guess about
+which firmware lacks the feature.
+
+It also matters for this bridge: on v9041.12 the BLE Modbus protocol is still
+unencrypted, so the firmware fix in this repo is usable *if the unit stays on
+v9041.12*. Updating to the Modbus-TCP-capable line is reported to encrypt BLE and
+end third-party BLE access — the two paths are mutually exclusive.
+
+### Prerequisites for the WiFi/Modbus route (all measured, not assumed)
+
+| Requirement | State 2026-11-05 | Note |
+|---|---|---|
+| IoT firmware with the local page | **v9041.12 — missing** | needs ≥ v9041.15; one-way for unencrypted BLE |
+| Home Assistant ≥ 2026.10.1 | **2026.9.2 — short** | every release of the integration pins 2026.10.1 in `hacs.json`, so no older tag avoids it |
+| HACS | present (`update.hacs_update`) | install path is available |
+| HA → unit :502 across VLANs | absent | needs a policy mirroring "Allow Bluetti bridge to MQTT" |
+| DHCP reservation for the unit | absent | README recommends one; current lease is 192.168.20.117 |
+
+Setup detail worth not getting wrong (from the integration README, which corrects the
+forum): the local page's `admin` password is the **device's Bluetooth password** from
+the BLUETTI app — not the app account password — or blank if none was ever set.
+
+No cloud-based BLUETTI integration is installed, so there is no interim data path
+while the BLE stays wedged.
+
 ## Evidence files
 
 - `evidence/bluetti-boot-1.log` — 35 s capture, 18 advertisers, Bluetti present
